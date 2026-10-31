@@ -14,6 +14,7 @@ export function StoreProvider({children}){
   const [hydrated,setHydrated]=useState(false),[saveMessage,setSaveMessage]=useState("");
   const [cloudEnabled,setCloudEnabled]=useState(false),[adminAuthenticated,setAdminAuthenticated]=useState(false),[adminConfigured,setAdminConfigured]=useState(false),[cloudStatus,setCloudStatus]=useState("Kayıt alanı kontrol ediliyor…");
   const latestCloudSave=useRef(Promise.resolve(false));
+  const lastCloudError=useRef("");
 
   useEffect(()=>{
     let active=true;
@@ -45,12 +46,13 @@ export function StoreProvider({children}){
   },[]);
 
   const persistCloud=async(bundle)=>{
+    lastCloudError.current="";
     try{
       const response=await fetch("/api/cloud-data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(bundle),cache:"no-store"});
       const payload=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(payload.error||"Bulut kaydı tamamlanamadı.");
       setCloudStatus("Bulut kayıtları güncel.");setSaveMessage("Kayıt çevrim içi olarak saklandı.");return true;
-    }catch(error){setCloudStatus("Bulut kaydı yapılamadı.");setSaveMessage(error.message||"Bulut kaydı yapılamadı; ayarları kontrol et.");return false;}
+    }catch(error){const message=error.message||"Bulut kaydı yapılamadı; ayarları kontrol et.";lastCloudError.current=message;setCloudStatus("Bulut kaydı yapılamadı.");setSaveMessage(message);return false;}
   };
 
   const write=(key,value)=>{
@@ -68,11 +70,11 @@ export function StoreProvider({children}){
 
   const replaceAll=async(bundle)=>{
     const safe={fixtures:Array.isArray(bundle?.fixtures)?bundle.fixtures:[],results:Array.isArray(bundle?.results)?bundle.results:[],forecasts:Array.isArray(bundle?.forecasts)?bundle.forecasts:[]};
-    if(cloudEnabled&&!adminAuthenticated){setSaveMessage("Yedeği buluta aktarmak için önce yönetici girişi yap.");return false;}
-    if(!saveLocalBundle(safe)){setSaveMessage("Tarayıcı kaydı yapılamadı.");return false;}
+    if(cloudEnabled&&!adminAuthenticated){const error="Yedeği buluta aktarmak için önce yönetici girişi yap.";setSaveMessage(error);return{ok:false,error};}
+    if(!saveLocalBundle(safe)){const error="Tarayıcı kaydı yapılamadı.";setSaveMessage(error);return{ok:false,error};}
     setFixtures(safe.fixtures);setResults(safe.results);setForecasts(safe.forecasts);
-    if(cloudEnabled)return await persistCloud(safe);
-    setSaveMessage("Yedek bu tarayıcıya aktarıldı.");return true;
+    if(cloudEnabled){const ok=await persistCloud(safe);return ok?{ok:true}:{ok:false,error:lastCloudError.current||"Bulut kaydı yapılamadı."};}
+    setSaveMessage("Yedek bu tarayıcıya aktarıldı.");return{ok:true};
   };
 
   const checkAdminSession=async()=>{

@@ -22,8 +22,8 @@ export default function SettingsPage(){
       const parsed=JSON.parse(await file.text());
       if(parsed.app!=="EloScout"||!Array.isArray(parsed.fixtures)||!Array.isArray(parsed.results)||!Array.isArray(parsed.forecasts))throw new Error("Bu dosya geçerli bir EloScout yedeği değil.");
       if(!window.confirm(`${parsed.fixtures.length} fikstür, ${parsed.results.length} skor ve ${parsed.forecasts.length} tahmin aktarılacak. Mevcut kayıtların yerini alacak. Devam edilsin mi?`))return;
-      const ok=await replaceAll(parsed);
-      if(!ok)throw new Error("Aktarım tamamlanamadı. Yönetici girişi ve veritabanı bağlantısını kontrol et.");
+      const result=await replaceAll(parsed);
+      if(!result?.ok)throw new Error(result?.error||"Aktarım tamamlanamadı. Yönetici girişi ve veritabanı bağlantısını kontrol et.");
       setMessage("Yedek başarıyla aktarıldı.");
     }catch(error){setMessage(error.message||"Yedek okunamadı.");}
     finally{setBusy(false);}
