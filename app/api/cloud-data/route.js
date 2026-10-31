@@ -8,6 +8,13 @@ const endpoint=()=>{
 };
 const json=(body,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"no-store"}});
 const defaultState={fixtures:[],results:[],forecasts:[]};
+const apiFailure=async(response)=>{
+  const payload=await response.json().catch(()=>({}));
+  const code=typeof payload.code==="string"?payload.code:"";
+  const message=typeof payload.message==="string"?payload.message.slice(0,220):"";
+  console.error("Supabase app_state API failure:",response.status,code,message);
+  return `Supabase HTTP ${response.status}${code?` (${code})`:""}${message?`: ${message}`:""}`;
+};
 
 export async function GET(){
   const config=endpoint();
@@ -16,10 +23,7 @@ export async function GET(){
     const response=await fetch(`${config.url}/rest/v1/app_state?id=eq.1&select=fixtures,results,forecasts,updated_at`,{
       headers:{apikey:config.key,Accept:"application/json"},cache:"no-store",
     });
-    if(!response.ok){
-      console.error("Supabase app_state read failed:",response.status);
-      return json({configured:true,error:`Supabase bağlantısı HTTP ${response.status} hatası verdi. URL, gizli anahtar ve app_state tablosunu kontrol et.`},503);
-    }
+    if(!response.ok)return json({configured:true,error:`${await apiFailure(response)}. URL ve app_state tablosunu kontrol et.`},503);
     const rows=await response.json();
     if(!rows.length)return json({configured:true,error:"Veritabanında başlangıç kaydı bulunamadı."},503);
     return json({configured:true,state:{fixtures:rows[0].fixtures||[],results:rows[0].results||[],forecasts:rows[0].forecasts||[],updated_at:rows[0].updated_at}});
@@ -38,10 +42,7 @@ export async function PUT(request){
       method:"PATCH",headers:{apikey:config.key,"Content-Type":"application/json",Prefer:"return=representation"},
       body:JSON.stringify({...body,updated_at:new Date().toISOString()}),cache:"no-store",
     });
-    if(!response.ok){
-      console.error("Supabase app_state write failed:",response.status);
-      return json({error:`Supabase kaydı HTTP ${response.status} hatası verdi. Vercel ortam değişkenlerini ve app_state tablosunu kontrol et.`},502);
-    }
+    if(!response.ok)return json({error:`${await apiFailure(response)}. Vercel URL ayarını ve Supabase app_state tablosunu kontrol et.`},502);
     const rows=await response.json();
     if(!rows.length)return json({error:"app_state tablosundaki başlangıç satırı eksik; kurulum SQL'ini tekrar uygula."},503);
     return json({ok:true,updated_at:rows[0].updated_at});
